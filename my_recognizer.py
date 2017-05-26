@@ -32,20 +32,25 @@ def recognize(models: dict, test_set: SinglesData):
         best = float('-inf')
         guessWord = ''
 
+        dictionary = dict()
+
         # iterate over the trained models
         for word, model in models.items():
             try:
-                probability = model.score(X, lengths)
+                probability = model.score(X, lengths)          
             except:
                 probability = float('-inf')
+
+            # add to the dictionary of word probablities
+            dictionary[word] = probability
 
             # record the best option so far
             if (probability > best):
                 best = probability
                 guessWord = word
             
-            # Append to probabilities
-            probabilities.append( { word: probability })
+        # Append to probabilities
+        probabilities.append( dictionary )
 
         # Append our best guess word
         guesses.append(guessWord)
