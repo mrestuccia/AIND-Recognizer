@@ -76,9 +76,26 @@ class SelectorBIC(ModelSelector):
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on BIC scores
-        raise NotImplementedError
+        # Init the values
+        bestBicScore = float("inf")
+        bestModel = None
 
+        # For each model, calculate the BIC Score. 
+        for idx in range(self.min_n_components + 1, self.max_n_components):
+            try:
+                selectedModel =  self.base_model(idx)
+                logL = selectedModel.score(self.X, self.lengths)
+                p = (idx**2) + 2 * selectedModel.n_features * idx
+                currentBicScore = -2 * logL + p * np.log(len(self.X))
+
+                # Save as the best model the one with smaller BIC Score
+                if (currentBicScore < bestBicScore):
+                    bestBicScore = currentBicScore
+                    bestModel = selectedModel
+            except:
+                pass
+        
+        return bestModel
 
 class SelectorDIC(ModelSelector):
     ''' select best model based on Discriminative Information Criterion
@@ -92,8 +109,38 @@ class SelectorDIC(ModelSelector):
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on DIC scores
-        raise NotImplementedError
+        # Init the values
+        bestDicScore = float("-inf")
+        bestModel = None
+
+        # For each model, calculate the DIC Score. 
+        for idx in range(self.min_n_components + 1, self.max_n_components):
+            try:
+                selectedModel =  self.base_model(idx)
+                logL = selectedModel.score(self.X, self.lengths)
+                p = (idx**2) + 2 * selectedModel.n_features * idx
+
+
+                # Remove the current word
+                listWithoutWord = list(filter(lambda word: word != self.this_word, self.hwords))
+
+                # calculate the score
+                score = 0
+                for word in listWithoutWord:
+                    X, lengths = self.hwords[word]
+                    score += selectedModel.score(X, lengths)
+
+                # calculate the DIC score
+                currentDicScore = logL - (score/ ( len(listWithoutWord) -1))
+            
+                # Save as the best model the one with bigger DIC Score
+                if (currentDicScore > bestDicScore):
+                    bestDicScore = currentDicScore
+                    bestModel = selectedModel
+            except:
+                pass
+
+        return bestModel
 
 
 class SelectorCV(ModelSelector):
@@ -104,5 +151,45 @@ class SelectorCV(ModelSelector):
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection using CV
-        raise NotImplementedError
+        # Init the values
+        bestCVScore = float("-inf")
+
+        # Set to 1 to get back a model if no improvement is found.
+        bestModel = self.base_model(1) #self.min_n_components??
+        scores= list()
+
+
+        # split method limiting the splits up to 2 for speed.
+        try:
+            split_method = KFold(min(2,len(self.sequences)))
+        except:
+            return bestModel
+
+        # For each model, calculate the CV Score. TODO: check min-max ids
+        for idx in range(self.min_n_components, self.max_n_components+1):
+            try:
+                
+                for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
+                
+                    X, lengths = combine_sequences(cv_train_idx, self.sequences)
+                    X2, lengths2 = combine_sequences(cv_test_idx, self.sequences)
+
+                    
+                    selectedModel = self.base_model(idx)
+                    selectedModelF = self.base_model(idx).fit(X, lengths)
+
+                    # Calculate the score (log likelihood)
+                    score = selectedModelF.score(X2, lengths2)
+                    scores.append(score)
+                
+            
+                # Find the best score
+                currentMean = np.mean(scores)
+
+                if (currentMean > bestCVScore):
+                    bestCVScore = currentMean
+                    bestModel = selectedModel
+
+            except:
+                pass
+        return bestModel
